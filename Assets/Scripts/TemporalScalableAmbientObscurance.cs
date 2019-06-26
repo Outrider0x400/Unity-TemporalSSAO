@@ -55,6 +55,8 @@ public class TemporalScalableAmbientObscurance : MonoBehaviour
     [Range(0.0f, 1.0f)]
     [Tooltip("Increase in case of ghosting. Decrease for less flickering.")]
     public float temporalConvergenceRate = 0.05f;
+    [Range(0.0f, 0.1f)]
+    public float zeroDivisionGuard = 0.025f;
 
     public Shader shader;
     Material tsaoMaterial;
@@ -90,8 +92,7 @@ public class TemporalScalableAmbientObscurance : MonoBehaviour
             tsaoMaterial.SetFloat("_BaselineDepthBias", bias);
             tsaoMaterial.SetFloat("_WorldSpaceRadius", radius);
 
-            // Used to determine the size of the projection of the disk
-            tsaoMaterial.SetFloat("_TanHalfFoV", Mathf.Tan(localCamera_.fieldOfView * Mathf.Deg2Rad));
+            tsaoMaterial.SetFloat("_ZeroDivisionGuard", zeroDivisionGuard);
 
             tsaoMaterial.SetFloat("_AspectRatio", localCamera_.aspect);
 

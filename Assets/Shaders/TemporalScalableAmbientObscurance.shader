@@ -74,16 +74,15 @@
 			#pragma fragment frag
 			#pragma target 3.0
 
-
-			#define ZERO_DIVISION_GUARD (0.005f)
+			
 			float _BaselineDepthBias = 0.005f;
 			float _DisocclusionBias = 0.005f;
 			float _DisocclusionThreshold = 0.05f;
 			float _NeiChangeThreshold = 0.005f;
 			float _NeiChangeBias = 0.05f;
 			float _WorldSpaceRadius = 1.0f;
-			float _TanHalfFoV;
 			float _AspectRatio;
+			float _ZeroDivisionGuard = 0.0005f;
 			float4x4 _LastViewMatrix;
 			float4x4 _InvViewMatrix;
 			float4x4 _ViewMatrix;
@@ -158,9 +157,9 @@
 				const float fragRandomSpinAngle = GenerateRandomAngle(fragId) + (temporalWeight - 0.5) * 6.28;
 
 				// Project the disk onto the screen-space, clamp it to prevent sampling too far away from the fragment
-				const float baseUVRadiusY = min(_WorldSpaceRadius / (_TanHalfFoV * 2.0f * fragEyeDistance), UV_CLAMP_MAX);
+				const float baseUVRadiusY = min(_WorldSpaceRadius * _ProjectionParams.y / fragEyeDistance, UV_CLAMP_MAX);
 				// After the clamping, the real radius of the sphere of influence
-				const float trueWorldRadius = baseUVRadiusY * 2.0f * fragEyeDistance * _TanHalfFoV; 
+				const float trueWorldRadius = baseUVRadiusY * fragEyeDistance / _ProjectionParams.y;
 				// The real screen-space size of the disk
 				const float2 trueUVRadius = float2(baseUVRadiusY / _AspectRatio, baseUVRadiusY);
 				const float trueSqaureRadius = trueWorldRadius * trueWorldRadius;
@@ -181,10 +180,14 @@
 					const float queryRayProjetion = dot(queryRay, fragViewNormal);
 
 					// The four formulation in M. McGuire's SAO shaders
-					//accumulatedObscurance += float(queryRayLengthSqr < trueSqaureRadius) * max((queryRayProjetion - adapativeDepthBias) / (ZERO_DIVISION_GUARD * 100 + queryRayLengthSqr), 0.0) * trueSqaureRadius * 0.6;
-					//accumulatedObscurance += pow(max(trueSqaureRadius - queryRayLengthSqr, 0.0f), 3u) * max( (queryRayProjetion - adapativeDepthBias) / (queryRayLengthSqr + ZERO_DIVISION_GUARD), 0.0f);
-					accumulatedObscurance += 4.0 * max(1.0 - queryRayLengthSqr / trueSqaureRadius, 0.0) * max(queryRayProjetion - adapativeDepthBias, 0.0);
+					//accumulatedObscurance += float(queryRayLengthSqr < trueSqaureRadius) * max((queryRayProjetion - adapativeDepthBias) / (_ZeroDivisionGuard * 100 + queryRayLengthSqr), 0.0) * trueSqaureRadius * 0.6;
+					//accumulatedObscurance += pow(max(trueSqaureRadius - queryRayLengthSqr, 0.0f), 3u) * max( (queryRayProjetion - adapativeDepthBias) / (queryRayLengthSqr + _ZeroDivisionGuard), 0.0f);
+					//accumulatedObscurance += 4.0 * max(1.0 - queryRayLengthSqr / trueSqaureRadius, 0.0) * max(queryRayProjetion - adapativeDepthBias, 0.0);
 					//accumulatedObscurance += 2.0 * float(queryRayLengthSqr < trueSqaureRadius) * max(queryRayProjetion - adapativeDepthBias, 0.0);
+
+					// Modified on the srcond formulation of SAO
+					accumulatedObscurance += pow(max(1 - queryRayLengthSqr / trueSqaureRadius, 0.0f), 3u) * max((queryRayProjetion - adapativeDepthBias) / (queryRayLengthSqr + _ZeroDivisionGuard), 0.0f);
+
 
 					// the UV of the reprojection of this sample
 					const float2 sampleReprojectionUv = sampleUv - _CameraMotionVectorsTexture.Sample(my_point_clamp_sampler, sampleUv);
@@ -217,7 +220,6 @@
 				temporalWeight = (temporalWeight > 1) ? (temporalWeight - 0.5) : temporalWeight;
 
 				return float2(accumulatedObscurance, temporalWeight);
-
 			}
 			ENDCG
 		}
